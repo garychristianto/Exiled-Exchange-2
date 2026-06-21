@@ -35,7 +35,10 @@ CAPS: dict[Rarity, tuple[int, int]] = {
 @dataclass(frozen=True)
 class State:
     rarity: Rarity
-    mods: frozenset[str]  # mod ids currently on the item
+    mods: frozenset[str]            # mod ids currently on the item
+    good: frozenset[str] = frozenset()  # present value-gated mods meeting their value
+    #   `good` only ever holds mods that some requirement puts a min_value on;
+    #   for value-agnostic crafts it stays empty and the state behaves as before.
 
     # ---- queries -------------------------------------------------------
     def prefixes(self, pool: ModPool) -> list[str]:
@@ -66,23 +69,26 @@ class State:
         return m.ilvl <= pool.ilvl
 
     # ---- transforms (return new immutable states) ----------------------
-    def with_mod(self, mod_id: str, rarity: Rarity | None = None) -> "State":
-        return State(rarity if rarity is not None else self.rarity, self.mods | {mod_id})
+    def with_mod(self, mod_id: str, rarity: Rarity | None = None,
+                 value_good: bool = False) -> "State":
+        good = self.good | {mod_id} if value_good else self.good
+        return State(rarity if rarity is not None else self.rarity,
+                     self.mods | {mod_id}, good)
 
     def without_mod(self, mod_id: str) -> "State":
-        return State(self.rarity, self.mods - {mod_id})
+        return State(self.rarity, self.mods - {mod_id}, self.good - {mod_id})
 
     def as_rarity(self, rarity: Rarity) -> "State":
-        return State(rarity, self.mods)
+        return State(rarity, self.mods, self.good)
+
+    def with_good(self, good: frozenset[str]) -> "State":
+        return State(self.rarity, self.mods, frozenset(good) & self.mods)
 
     def __repr__(self) -> str:
-        body = ",".join(sorted(self.mods)) if self.mods else "-"
+        def tag(m: str) -> str:
+            return m + ("*" if m in self.good else "")  # * = value meets threshold
+        body = ",".join(tag(m) for m in sorted(self.mods)) if self.mods else "-"
         return f"{self.rarity.name[:1]}[{body}]"
 
 
 WHITE = State(Rarity.NORMAL, frozenset())
-
-
-def meets(state: State, target: frozenset[str]) -> bool:
-    """Success = every required target mod is present (tiers/values ignored in v0)."""
-    return target <= state.mods

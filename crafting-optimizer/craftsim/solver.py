@@ -19,7 +19,8 @@ from dataclasses import dataclass
 from .actions import SUCCESS, Action
 from .mods import ModPool
 from .prices import Prices
-from .state import WHITE, State, meets
+from .state import WHITE, State
+from .target import Target
 
 
 @dataclass
@@ -27,7 +28,7 @@ class Solution:
     value: dict[State, float]          # expected cost-to-go for every state
     policy: dict[State, Action]        # best action per state
     states: list[State]
-    target: frozenset[str]
+    target: Target
     pool: ModPool
     prices: Prices
 
@@ -37,12 +38,12 @@ class Solution:
 
 
 def _reachable(start: State, pool: ModPool, actions: list[Action],
-               target: frozenset[str]) -> list[State]:
+               target: Target) -> list[State]:
     seen: set[State] = {start, SUCCESS}
     frontier = [start]
     while frontier:
         s = frontier.pop()
-        if meets(s, target):           # goal: no need to expand further
+        if target.met(s):              # goal: no need to expand further
             continue
         for a in actions:
             if not a.applicable(s, pool):
@@ -57,46 +58,58 @@ def _reachable(start: State, pool: ModPool, actions: list[Action],
     return list(seen)
 
 
-def solve(pool: ModPool, target: frozenset[str], actions: list[Action],
+def solve(pool: ModPool, target: Target, actions: list[Action],
           prices: Prices, start: State = WHITE,
-          tol: float = 1e-9, max_iter: int = 100_000) -> Solution:
+          tol: float = 1e-7, max_iter: int = 100_000) -> Solution:
     states = _reachable(start, pool, actions, target)
+    idx = {s: i for i, s in enumerate(states)}
 
-    # Precompute (action, cost, distribution) per state, skipping illegal /
-    # no-op moves so value iteration stays cheap.
-    moves: dict[State, list[tuple[Action, float, dict]]] = {}
-    for s in states:
-        if s is SUCCESS or meets(s, target):
-            moves[s] = []
+    # Compile each state's legal moves into index/probability arrays so the
+    # value-iteration hot loop touches only Python lists/floats (no dict hashing
+    # or transition recomputation per sweep). Actions are kept parallel for the
+    # policy. Terminals (goal / SUCCESS) get no moves and keep value 0.
+    move_acts: list[list[Action]] = [[] for _ in states]
+    move_costs: list[list[float]] = [[] for _ in states]
+    move_dists: list[list[tuple[tuple[int, float], ...]]] = [[] for _ in states]
+    for i, s in enumerate(states):
+        if s is SUCCESS or target.met(s):
             continue
-        ms = []
         for a in actions:
             if not a.applicable(s, pool):
                 continue
             dist = a.transition(s, pool)
             if not dist:
                 continue
-            ms.append((a, a.cost(prices), dist))
-        moves[s] = ms
+            move_acts[i].append(a)
+            move_costs[i].append(a.cost(prices))
+            move_dists[i].append(tuple((idx[s2], p) for s2, p in dist.items()))
 
-    V: dict[State, float] = {s: 0.0 for s in states}
-    policy: dict[State, Action] = {}
+    n = len(states)
+    V = [0.0] * n
+    best = [-1] * n
+    # Iterate only over non-terminal states (Gauss-Seidel, in place).
+    active = [i for i in range(n) if move_acts[i]]
 
     for _ in range(max_iter):
         delta = 0.0
-        for s in states:
-            if not moves[s]:           # terminal (goal or SUCCESS): V stays 0
-                continue
-            best_cost = float("inf")
-            best_act = None
-            for a, c, dist in moves[s]:
-                q = c + sum(p * V[s2] for s2, p in dist.items())
-                if q < best_cost:
-                    best_cost, best_act = q, a
-            delta = max(delta, abs(best_cost - V[s]))
-            V[s] = best_cost
-            policy[s] = best_act
+        for i in active:
+            costs, dists = move_costs[i], move_dists[i]
+            bc = float("inf")
+            bj = -1
+            for j in range(len(costs)):
+                q = costs[j]
+                for k, p in dists[j]:
+                    q += p * V[k]
+                if q < bc:
+                    bc, bj = q, j
+            if abs(bc - V[i]) > delta:
+                delta = abs(bc - V[i])
+            V[i] = bc
+            best[i] = bj
         if delta < tol:
             break
 
-    return Solution(V, policy, states, target, pool, prices)
+    value = {s: V[idx[s]] for s in states}
+    policy = {s: move_acts[idx[s]][best[idx[s]]]
+              for s in states if best[idx[s]] >= 0}
+    return Solution(value, policy, states, target, pool, prices)

@@ -1,0 +1,19 @@
+{
+  "item_class": "Amulet",
+  "ilvl": 82,
+  "_comment": "Neutral-schema fixture mirroring craftsim.mods.TOY_AMULET. Hand-authored sample of the shape a poe2db ingestion should emit (one record per mod tier). Replace with real poe2db output once poe2db.tw is allowlisted.",
+  "mods": [
+    {"id": "p_life_t1", "name": "+# to maximum Life", "gen_type": "prefix", "family": "Life", "ilvl": 75, "weight": 400, "tags": ["life"], "tier": 1, "vmin": 90, "vmax": 110},
+    {"id": "p_life_t2", "name": "+# to maximum Life", "gen_type": "prefix", "family": "Life", "ilvl": 50, "weight": 800, "tags": ["life"], "tier": 2, "vmin": 60, "vmax": 89},
+    {"id": "p_life_t3", "name": "+# to maximum Life", "gen_type": "prefix", "family": "Life", "ilvl": 1, "weight": 1000, "tags": ["life"], "tier": 3, "vmin": 30, "vmax": 59},
+    {"id": "p_es", "name": "+# to maximum Energy Shield", "gen_type": "prefix", "family": "EnergyShield", "ilvl": 1, "weight": 800, "tags": ["energy_shield"]},
+    {"id": "p_mana", "name": "+# to maximum Mana", "gen_type": "prefix", "family": "Mana", "ilvl": 1, "weight": 1000, "tags": ["mana"]},
+    {"id": "p_phys", "name": "#% increased Physical Damage", "gen_type": "prefix", "family": "PhysDamage", "ilvl": 1, "weight": 600, "tags": ["damage", "physical"]},
+    {"id": "s_allres_t1", "name": "+#% to all Elemental Resistances", "gen_type": "suffix", "family": "AllRes", "ilvl": 75, "weight": 100, "tags": ["resistance"], "tier": 1, "vmin": 13, "vmax": 15},
+    {"id": "s_allres_t2", "name": "+#% to all Elemental Resistances", "gen_type": "suffix", "family": "AllRes", "ilvl": 50, "weight": 250, "tags": ["resistance"], "tier": 2, "vmin": 9, "vmax": 12},
+    {"id": "s_fire", "name": "+#% to Fire Resistance", "gen_type": "suffix", "family": "FireRes", "ilvl": 1, "weight": 1000, "tags": ["resistance", "fire"]},
+    {"id": "s_cold", "name": "+#% to Cold Resistance", "gen_type": "suffix", "family": "ColdRes", "ilvl": 1, "weight": 1000, "tags": ["resistance", "cold"]},
+    {"id": "s_attr", "name": "+# to all Attributes", "gen_type": "suffix", "family": "Attributes", "ilvl": 30, "weight": 500, "tags": ["attribute"]},
+    {"id": "s_cast", "name": "#% increased Cast Speed", "gen_type": "suffix", "family": "CastSpeed", "ilvl": 20, "weight": 400, "tags": ["caster", "speed"]}
+  ]
+}

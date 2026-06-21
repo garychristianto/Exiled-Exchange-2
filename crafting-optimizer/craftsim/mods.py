@@ -11,6 +11,13 @@ What a real poe2db record gives us, and where it maps here:
   - required item level    -> Mod.ilvl
   - tags                   -> Mod.tags     (used later for tag-weighted spawn odds)
   - spawn weight           -> Mod.weight
+  - tier index             -> Mod.tier     (a "stat" is a family of tiers)
+  - rolled value range     -> Mod.vmin / Mod.vmax   (Divine rerolls within this)
+
+A mod TIER is just a row: e.g. "Life" is a family with three rows (t1/t2/t3),
+each its own ilvl, weight and value range. Family exclusion already prevents two
+tiers of the same stat coexisting, so tiers need no special machinery — only the
+data. Targeting "at least T2 life" = accept the set {life_t1, life_t2}.
 """
 from __future__ import annotations
 
@@ -33,6 +40,19 @@ class Mod:
     ilvl: int            # minimum item level for this mod to be able to roll
     weight: int          # base spawn weight (tag adjustments applied later)
     tags: tuple[str, ...] = field(default_factory=tuple)
+    tier: int = 0        # 1 = best; 0 = "untiered" toy mod
+    vmin: float = 0.0    # rolled-value range (for Divine / value thresholds)
+    vmax: float = 0.0
+
+    def p_value_at_least(self, threshold: float) -> float:
+        """P(a fresh roll of this mod is >= threshold), assuming uniform value."""
+        if self.vmax <= self.vmin:
+            return 1.0 if self.vmin >= threshold else 0.0
+        if threshold <= self.vmin:
+            return 1.0
+        if threshold > self.vmax:
+            return 0.0
+        return (self.vmax - threshold) / (self.vmax - self.vmin)
 
     def __repr__(self) -> str:  # keep policy printouts short
         return self.id
@@ -59,24 +79,30 @@ class ModPool:
 
 # --------------------------------------------------------------------------
 # Toy pool: a Stellar Amulet at ilvl 82.
-# Weights are illustrative but in a realistic *shape*: a basic resist is common,
-# "all resistances" is a rare chase suffix, etc. This is what makes targeting
-# (omens) actually pay off, which is the whole point of the optimizer.
+# Weights/ranges are illustrative but in a realistic *shape*: higher tiers need
+# higher ilvl and roll rarer; "all resistances" is a low-weight chase suffix.
+# Life and AllRes are TIERED (a family of rows) to exercise tier targeting and
+# Divine; the rest are single-tier junk/filler.
 # --------------------------------------------------------------------------
 TOY_AMULET = ModPool(
     item_class="Amulet",
     ilvl=82,
     mods=(
-        # prefixes
-        Mod("p_life",  "# to maximum Life",         Gen.PREFIX, "Life",        1, 1000, ("life",)),
-        Mod("p_es",    "# to maximum Energy Shield", Gen.PREFIX, "EnergyShield", 1,  800, ("energy_shield",)),
-        Mod("p_mana",  "# to maximum Mana",          Gen.PREFIX, "Mana",        1, 1000, ("mana",)),
-        Mod("p_phys",  "#% increased Phys Damage",   Gen.PREFIX, "PhysDamage",  1,  600, ("damage", "physical")),
-        # suffixes
-        Mod("s_fire",  "#% to Fire Resistance",      Gen.SUFFIX, "FireRes",    1, 1000, ("resistance", "fire")),
-        Mod("s_cold",  "#% to Cold Resistance",      Gen.SUFFIX, "ColdRes",    1, 1000, ("resistance", "cold")),
-        Mod("s_allres", "#% to all Elemental Res",   Gen.SUFFIX, "AllRes",    50,  250, ("resistance",)),
-        Mod("s_attr",  "# to all Attributes",        Gen.SUFFIX, "Attributes", 30,  500, ("attribute",)),
-        Mod("s_cast",  "#% increased Cast Speed",    Gen.SUFFIX, "CastSpeed",  20,  400, ("caster", "speed")),
+        # --- Life prefix: 3 tiers (family "Life") ---
+        Mod("p_life_t1", "+# to maximum Life", Gen.PREFIX, "Life", 75, 400, ("life",), tier=1, vmin=90, vmax=110),
+        Mod("p_life_t2", "+# to maximum Life", Gen.PREFIX, "Life", 50, 800, ("life",), tier=2, vmin=60, vmax=89),
+        Mod("p_life_t3", "+# to maximum Life", Gen.PREFIX, "Life", 1, 1000, ("life",), tier=3, vmin=30, vmax=59),
+        # --- other prefixes (single tier filler) ---
+        Mod("p_es",   "+# to maximum Energy Shield", Gen.PREFIX, "EnergyShield", 1, 800, ("energy_shield",)),
+        Mod("p_mana", "+# to maximum Mana",          Gen.PREFIX, "Mana",         1, 1000, ("mana",)),
+        Mod("p_phys", "#% increased Phys Damage",    Gen.PREFIX, "PhysDamage",   1, 600, ("damage", "physical")),
+        # --- AllRes suffix: 2 tiers (family "AllRes"), the chase mod ---
+        Mod("s_allres_t1", "+#% to all Elemental Resistances", Gen.SUFFIX, "AllRes", 75, 100, ("resistance",), tier=1, vmin=13, vmax=15),
+        Mod("s_allres_t2", "+#% to all Elemental Resistances", Gen.SUFFIX, "AllRes", 50, 250, ("resistance",), tier=2, vmin=9, vmax=12),
+        # --- other suffixes (single tier filler) ---
+        Mod("s_fire", "+#% to Fire Resistance", Gen.SUFFIX, "FireRes",    1, 1000, ("resistance", "fire")),
+        Mod("s_cold", "+#% to Cold Resistance", Gen.SUFFIX, "ColdRes",    1, 1000, ("resistance", "cold")),
+        Mod("s_attr", "+# to all Attributes",   Gen.SUFFIX, "Attributes", 30, 500, ("attribute",)),
+        Mod("s_cast", "#% increased Cast Speed", Gen.SUFFIX, "CastSpeed",  20, 400, ("caster", "speed")),
     ),
 )

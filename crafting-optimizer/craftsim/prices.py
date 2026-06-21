@@ -35,6 +35,7 @@ DEFAULT_PRICES = Prices({
     "chaos": 0.25,
     "annul": 2.0,
     "essence": 1.5,
+    "divine": 4.0,
     "omen_dextral_exalt": 6.0,
     "omen_sinistral_exalt": 6.0,
     "omen_dextral_annul": 5.0,

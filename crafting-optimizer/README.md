@@ -9,8 +9,10 @@ so every probability is hand-checkable. The engine is real; only the data is fak
 
 ```
 python demo.py               # optimize a tiered, value-gated target amulet
-python tests/test_engine.py  # analytic sanity checks (closed-form expected costs)
-python tests/test_ingest.py  # data ingestion: neutral JSON -> ModPool -> solver
+python demo_scale.py         # exact vs abstract as the pool grows (scaling)
+python validate.py           # analytic engine vs independent Monte-Carlo
+python tests/test_engine.py tests/test_ingest.py \
+       tests/test_validation.py tests/test_abstract.py   # 17 checks
 ```
 
 ## Why an MDP (and why this beats Craft of Exile / PoEDB)
@@ -98,16 +100,38 @@ Two caveats, surfaced honestly:
    rather than emit wrong weights. Validate them against a real poe2db page, then
    `cache_to_json` — from then on everything runs offline against the snapshot.
 
+## Scaling: the abstract engine (`craftsim/abstract.py`)
+
+The exact engine tracks every mod identity, so a real ~500-mod pool explodes the
+state set. The **abstract** engine (`solve_abstract`) keeps only what the
+optimizer needs:
+
+    (rarity, per-requirement status, junk_prefix_count, junk_suffix_count)
+
+where a requirement status is `absent` / `blocked-by-wrong-tier` / `present(mod,
+value_ok)`. Target-relevant mods are tracked exactly; everything else is a per-
+slot **count**. The state space therefore depends on the number of target
+requirements (a handful), **not** on pool size. Both engines run on the same
+generic `solve_mdp`.
+
+Junk weight uses a first-order family-exhaustion correction (`_njw_eff`), which
+is **exact for uniform junk weights** and within a few % otherwise. Measured by
+`demo_scale.py` / `tests/test_abstract.py`:
+
+| pool | exact E[cost] | abstract | err | exact states | abstract states |
+|------|--------------|----------|-----|--------------|-----------------|
+| 12 mods | 12.601 | 12.601 | 0.0% | 1,450 | **318** |
+| 18 mods | 13.978 | 13.978 | 0.0% | 16,420 | **318** |
+| 806 mods | (intractable) | 15.070 | — | — | **318** |
+
+The abstract state count stays flat at 318 while the exact engine goes from 2s to
+84s to intractable. Non-uniform junk worst case measured at ~2.7%.
+
 ## What's intentionally NOT modeled yet (the plug-in points)
 
 - **Tag re-weighting** — adding a mod can change later weights via tags. Hook:
-  `_addable()` / `_place()` in `actions.py` (swap static `m.weight` for a
-  tag-adjusted weight given the current state's tags).
-- **State abstraction for scale** — the toy tracks exact mod identities (~1.5k
-  states for a 3-requirement tiered/value-gated target). At full scale, abstract
-  to (target mods present, junk-prefix count, junk-suffix count, relevant tags) —
-  collapses millions of states to a few thousand without changing the solver.
-  See `state.py` header.
+  `_addable()` / `_place()` in `actions.py` (and the category weights in
+  `abstract.py`): swap static `m.weight` for a tag-adjusted weight.
 - **Recombinators** — a two-item operation; breaks the single-item state and needs
   a higher-level search on top. Deliberately out of scope for v1.
 

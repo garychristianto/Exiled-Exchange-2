@@ -11,10 +11,16 @@ iteration converges.
 The argmin action in each state is the optimal policy — i.e. the best click to
 make given whatever the item currently is. That is exactly what powers a
 "scan item -> tell me the next step" feature.
+
+`solve_mdp` is the generic engine: it takes any hashable states, an `expand`
+function (state -> list of (action, cost, {state: prob})) and an `is_goal`
+predicate. Both the exact identity-tracking model (`solve`) and the abstract,
+pool-size-independent model (craftsim.abstract) drive it.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Callable, Hashable
 
 from .actions import SUCCESS, Action
 from .mods import ModPool
@@ -22,80 +28,69 @@ from .prices import Prices
 from .state import WHITE, State
 from .target import Target
 
+Expand = Callable[[Hashable], "list[tuple]"]
+IsGoal = Callable[[Hashable], bool]
+
 
 @dataclass
 class Solution:
-    value: dict[State, float]          # expected cost-to-go for every state
-    policy: dict[State, Action]        # best action per state
-    states: list[State]
-    target: Target
-    pool: ModPool
-    prices: Prices
+    value: dict                        # state -> expected cost-to-go
+    policy: dict                       # state -> best action
+    states: list
+    target: Target | None = None
+    pool: ModPool | None = None
+    prices: Prices | None = None
 
-    def best(self, state: State) -> tuple[Action, float]:
+    def best(self, state):
         """Optimal next action and expected remaining cost for a (scanned) state."""
         return self.policy[state], self.value[state]
 
 
-def _reachable(start: State, pool: ModPool, actions: list[Action],
-               target: Target) -> list[State]:
-    seen: set[State] = {start, SUCCESS}
+def solve_mdp(start: Hashable, expand: Expand, is_goal: IsGoal,
+              tol: float = 1e-7, max_iter: int = 100_000):
+    """Generic stochastic-shortest-path value iteration over arbitrary states.
+
+    Returns (value, policy, states). Goal states are terminal with value 0;
+    every other state must be able to reach a goal (the Buy terminal guarantees
+    this), so iteration converges. The hot loop runs on integer-indexed arrays.
+    """
+    # 1) discover reachable states and cache their compiled moves
+    expanded: dict = {}
+    seen = {start}
     frontier = [start]
     while frontier:
         s = frontier.pop()
-        if target.met(s):              # goal: no need to expand further
+        if is_goal(s):
+            expanded[s] = []
             continue
-        for a in actions:
-            if not a.applicable(s, pool):
-                continue
-            dist = a.transition(s, pool)
-            if not dist:
-                continue
+        ms = expand(s)
+        expanded[s] = ms
+        for _, _, dist in ms:
             for s2 in dist:
                 if s2 not in seen:
                     seen.add(s2)
                     frontier.append(s2)
-    return list(seen)
 
-
-def solve(pool: ModPool, target: Target, actions: list[Action],
-          prices: Prices, start: State = WHITE,
-          tol: float = 1e-7, max_iter: int = 100_000) -> Solution:
-    states = _reachable(start, pool, actions, target)
+    states = list(seen)
     idx = {s: i for i, s in enumerate(states)}
-
-    # Compile each state's legal moves into index/probability arrays so the
-    # value-iteration hot loop touches only Python lists/floats (no dict hashing
-    # or transition recomputation per sweep). Actions are kept parallel for the
-    # policy. Terminals (goal / SUCCESS) get no moves and keep value 0.
-    move_acts: list[list[Action]] = [[] for _ in states]
-    move_costs: list[list[float]] = [[] for _ in states]
-    move_dists: list[list[tuple[tuple[int, float], ...]]] = [[] for _ in states]
-    for i, s in enumerate(states):
-        if s is SUCCESS or target.met(s):
-            continue
-        for a in actions:
-            if not a.applicable(s, pool):
-                continue
-            dist = a.transition(s, pool)
-            if not dist:
-                continue
+    move_acts = [[] for _ in states]
+    move_costs = [[] for _ in states]
+    move_dists = [[] for _ in states]
+    for s, i in idx.items():
+        for a, c, dist in expanded.get(s, []):
             move_acts[i].append(a)
-            move_costs[i].append(a.cost(prices))
+            move_costs[i].append(c)
             move_dists[i].append(tuple((idx[s2], p) for s2, p in dist.items()))
 
     n = len(states)
     V = [0.0] * n
     best = [-1] * n
-    # Iterate only over non-terminal states (Gauss-Seidel, in place).
     active = [i for i in range(n) if move_acts[i]]
-
     for _ in range(max_iter):
         delta = 0.0
         for i in active:
             costs, dists = move_costs[i], move_dists[i]
-            bc = float("inf")
-            bj = -1
+            bc, bj = float("inf"), -1
             for j in range(len(costs)):
                 q = costs[j]
                 for k, p in dists[j]:
@@ -110,6 +105,26 @@ def solve(pool: ModPool, target: Target, actions: list[Action],
             break
 
     value = {s: V[idx[s]] for s in states}
-    policy = {s: move_acts[idx[s]][best[idx[s]]]
-              for s in states if best[idx[s]] >= 0}
+    policy = {s: move_acts[idx[s]][best[idx[s]]] for s in states if best[idx[s]] >= 0}
+    return value, policy, states
+
+
+def solve(pool: ModPool, target: Target, actions: list[Action],
+          prices: Prices, start: State = WHITE,
+          tol: float = 1e-7, max_iter: int = 100_000) -> Solution:
+    """Exact, identity-tracking solve over the full mod pool."""
+    def expand(s: State):
+        out = []
+        for a in actions:
+            if not a.applicable(s, pool):
+                continue
+            dist = a.transition(s, pool)
+            if dist:
+                out.append((a, a.cost(prices), dist))
+        return out
+
+    def is_goal(s: State) -> bool:
+        return s is SUCCESS or target.met(s)
+
+    value, policy, states = solve_mdp(start, expand, is_goal, tol, max_iter)
     return Solution(value, policy, states, target, pool, prices)

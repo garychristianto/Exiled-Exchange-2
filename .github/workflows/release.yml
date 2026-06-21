@@ -1,0 +1,74 @@
+name: Release
+
+# Push a tag like `v0.16.0` (matching the version in main/package.json) to
+# build all platforms and publish a GitHub Release on this fork. The running
+# app's auto-updater (pointed at this fork via main/electron-builder.yml) then
+# picks it up automatically.
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  renderer:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v6
+    - uses: actions/setup-node@v6
+      with:
+        node-version: 24
+    - run: npm ci
+      working-directory: ./renderer
+    - run: npm run make-index-files
+      working-directory: ./renderer
+    - run: npm run build
+      working-directory: ./renderer
+    - uses: actions/upload-artifact@v7
+      with:
+        name: renderer-dist
+        path: ./renderer/dist
+        retention-days: 1
+
+  package:
+    needs: renderer
+    strategy:
+      matrix:
+        os: [windows-2025, ubuntu-22.04, macos-14]
+    runs-on: ${{ matrix.os }}
+    steps:
+    - uses: actions/checkout@v6
+    - uses: actions/setup-node@v6
+      with:
+        node-version: 24
+    - uses: actions/download-artifact@v8
+      with:
+        name: renderer-dist
+        path: ./renderer/dist
+    - run: npm ci
+      working-directory: ./main
+    - run: npm run build
+      working-directory: ./main
+    # `-p always` uploads installers + latest*.yml to a *draft* release for the
+    # tag. All three OS jobs upload to the same draft.
+    - run: npm run package "--" -p always
+      working-directory: ./main
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish:
+    needs: package
+    runs-on: ubuntu-latest
+    steps:
+    # Once every platform has uploaded, flip the draft to a published release
+    # and mark it "latest" so the auto-updater can see it.
+    - name: Publish the release
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        gh release edit "${{ github.ref_name }}" \
+          --repo "${{ github.repository }}" \
+          --draft=false \
+          --latest

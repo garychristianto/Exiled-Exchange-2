@@ -24,10 +24,6 @@ export interface ShortcutAction {
         target: string;
       }
     | {
-        type: "ocr-text";
-        target: "heist-gems";
-      }
-    | {
         type: "trigger-event";
         target: string;
       }
@@ -89,7 +85,6 @@ export type IpcEvent =
   | IpcHostConfig
   | IpcWidgetAction
   | IpcItemText
-  | IpcOcrText
   | IpcConfigChanged
   | IpcUserAction
   | IpcWriteToFile
@@ -179,16 +174,6 @@ type IpcItemText = Event<
     item?: unknown;
     position: { x: number; y: number };
     focusOverlay: boolean;
-  }
->;
-
-type IpcOcrText = Event<
-  "MAIN->CLIENT::ocr-text",
-  {
-    target: string;
-    pressTime: number;
-    ocrTime: number;
-    paragraphs: string[];
   }
 >;
 

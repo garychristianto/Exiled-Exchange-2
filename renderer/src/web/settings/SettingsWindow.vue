@@ -139,7 +139,6 @@ import SettingsDebug from "./debug.vue";
 import SettingsMaps from "../map-check/settings-maps.vue";
 import SettingsStashSearch from "../stash-search/stash-search-editor.vue";
 import SettingsStopwatch from "../stopwatch/settings-stopwatch.vue";
-import SettingsItemSearch from "../item-search/settings-item-search.vue";
 import SettingsLeveling from "../leveling/settings-leveling.vue";
 import SettingsLibrary from "../library/settings-library.vue";
 import { disableWidget, enableWidget, findWidget } from "./utils";
@@ -345,8 +344,6 @@ function menuByType(type?: string) {
       return [[SettingsItemcheck, SettingsMaps]];
     case "price-check":
       return [[SettingsPricecheck]];
-    case "item-search":
-      return [[SettingsItemSearch]];
     case "library":
       return [[SettingsLibrary]];
     default:

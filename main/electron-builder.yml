@@ -1,12 +1,14 @@
 publish:
-  - "github"
+  - provider: github
+    owner: garychristianto
+    repo: Exiled-Exchange-2
 productName: "Exiled Exchange 2"
 npmRebuild: false
 files:
   - "package.json"
   - from: "dist"
     to: "."
-    filter: ["main.js", "vision.js"]
+    filter: ["main.js"]
   - from: "../renderer/dist"
     to: "."
 extraMetadata:

@@ -5,7 +5,6 @@ import { HostConfig, ShortcutAction } from "@ipc/types";
 import type * as widget from "./overlay/widgets";
 import type { StashSearchWidget } from "./stash-search/widget";
 import type { ItemCheckWidget } from "./item-check/widget";
-import type { ItemSearchWidget } from "./item-search/widget";
 import { registry as widgetRegistry } from "./overlay/widget-registry.js";
 import { LibraryWidget } from "./library/widget";
 
@@ -423,11 +422,6 @@ function upgradeConfig(_config: Config): Config {
     ) as widget.PriceCheckWidget;
     priceCheck.builtinBrowser = false;
 
-    const itemSearch = config.widgets.find(
-      (w) => w.wmType === "item-search",
-    ) as ItemSearchWidget;
-    itemSearch.ocrGemsKey = null;
-
     const itemCheck = config.widgets.find(
       (w) => w.wmType === "item-check",
     ) as ItemCheckWidget;
@@ -795,15 +789,6 @@ function getConfigForHost(): HostConfig {
             type: "trigger-event",
             target: `stopwatch-reset:${widget.wmId}`,
           },
-        });
-      }
-    } else if (widget.wmType === "item-search") {
-      const itemSearch = widget as ItemSearchWidget;
-      if (itemSearch.ocrGemsKey) {
-        actions.push({
-          shortcut: itemSearch.ocrGemsKey,
-          keepModKeys: true,
-          action: { type: "ocr-text", target: "heist-gems" },
         });
       }
     }

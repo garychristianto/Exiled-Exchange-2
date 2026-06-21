@@ -52,15 +52,29 @@ CSC_NAME="Certificate name in Keychain" npm run package
 
 # How to release a build
 
-1. Commit all changes
-2. Bump version in `main/package.json`
-3. `npm i` in renderer & main (update `package-lock.json` with new version)
-4. `npm run build` in renderer & main
-5. Stage & commit bumped version
-6. `git push`
-7. `git tag vX.X.X`
-8. `git push origin vX.X.X`
-9. Open release page, create release with tag & title as text of tag & save as draft
+Releases on this fork are fully automated by `.github/workflows/release.yml`:
+pushing a `vX.Y.Z` tag builds Windows/Linux/macOS and publishes a GitHub
+Release on this fork, which the app's auto-updater then picks up.
+
+1. Bump the version in `main/package.json` (keep it consistent across the repo —
+   `versionCheck.py` runs in pre-commit and CI).
+2. `npm i` in renderer & main (updates `package-lock.json` with the new version).
+3. Commit the bumped version and `git push`.
+4. Tag it **to match the version** and push the tag:
+   ```shell
+   git tag v0.16.0   # must equal main/package.json version
+   git push origin v0.16.0
+   ```
+5. The Release workflow builds all platforms, uploads the installers +
+   `latest*.yml` to a draft release, then publishes it as "latest". No manual
+   draft/publish step needed.
+
+Requirements (one-time, on the fork):
+- Settings → Actions → General → Workflow permissions → **Read and write**, so CI
+  can create the release.
+
+> The local `# How to build` steps above are only needed for testing a build on
+> your own machine; the Release workflow does the packaging for distribution.
 
 # How to build yourself
 

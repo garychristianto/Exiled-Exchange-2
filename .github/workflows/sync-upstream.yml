@@ -1,0 +1,96 @@
+name: Sync upstream
+
+# Watches Kvan7/Exiled-Exchange-2 for new commits, once a day (and on demand).
+#   - Up to date  -> does nothing.
+#   - Clean merge -> updates branch `sync/upstream` and opens a PR to review.
+#   - Conflicts   -> opens an issue so you know a manual merge is needed.
+# You still review + merge the PR and push a `vX.Y.Z` tag to cut the release.
+on:
+  schedule:
+    - cron: '0 6 * * *' # daily at 06:00 UTC
+  workflow_dispatch: # adds a "Run workflow" button for on-demand checks
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+env:
+  UPSTREAM: https://github.com/Kvan7/Exiled-Exchange-2.git
+  SYNC_BRANCH: sync/upstream
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v6
+      with:
+        ref: master
+        fetch-depth: 0
+
+    - name: Configure git identity
+      run: |
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+    - name: Fetch upstream
+      run: |
+        git remote add upstream "$UPSTREAM"
+        git fetch upstream master
+
+    - name: Is upstream ahead?
+      id: check
+      run: |
+        if git merge-base --is-ancestor upstream/master origin/master; then
+          echo "ahead=false" >> "$GITHUB_OUTPUT"
+          echo "Already up to date with upstream."
+        else
+          echo "ahead=true" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Attempt merge
+      if: steps.check.outputs.ahead == 'true'
+      id: merge
+      run: |
+        git checkout -B "$SYNC_BRANCH" origin/master
+        if git merge --no-edit upstream/master; then
+          echo "clean=true" >> "$GITHUB_OUTPUT"
+        else
+          git merge --abort
+          echo "clean=false" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Open / update sync PR (clean merge)
+      if: steps.check.outputs.ahead == 'true' && steps.merge.outputs.clean == 'true'
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        OWNER: ${{ github.repository_owner }}
+      run: |
+        git push -f origin "$SYNC_BRANCH"
+        existing=$(gh pr list --head "$SYNC_BRANCH" --state open --json number --jq '.[].number')
+        if [ -z "$existing" ]; then
+          gh pr create \
+            --base master \
+            --head "$SYNC_BRANCH" \
+            --assignee "$OWNER" \
+            --title "Sync upstream into master" \
+            --body "Automated clean merge of \`upstream/master\` (Kvan7/Exiled-Exchange-2). Review the diff, merge, then push a \`vX.Y.Z\` tag to cut a release."
+        fi
+
+    - name: Open issue (merge conflicts)
+      if: steps.check.outputs.ahead == 'true' && steps.merge.outputs.clean == 'false'
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        OWNER: ${{ github.repository_owner }}
+      run: |
+        if [ -n "$(gh issue list --label upstream-sync --state open --json number --jq '.[].number')" ]; then
+          echo "Conflict issue already open; skipping."
+          exit 0
+        fi
+        gh label create upstream-sync --color FBCA04 --description "Upstream needs a manual merge" --force >/dev/null 2>&1 || true
+        body=$'Upstream has new commits that conflict with your customizations, so they need a manual merge:\n\n```\ngit fetch upstream\ngit checkout master\ngit merge upstream/master\n# resolve conflicts, commit, push, then:\ngit tag vX.Y.Z && git push origin vX.Y.Z\n```'
+        gh issue create \
+          --label upstream-sync \
+          --assignee "$OWNER" \
+          --title "Upstream updates need a manual merge" \
+          --body "$body"

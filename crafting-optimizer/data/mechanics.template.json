@@ -1,0 +1,171 @@
+{
+  "_README": "Mechanics spec = INPUT #2 of three (1: mod pool from poe2db; 2: currency/omen behavior = THIS FILE; 3: prices from the trade API). poe2db does NOT contain this; it is game-logic, sourced from patch notes / wiki / datamine. Each entry maps to one craftsim Action: the engine reads `operations` to build the transition and `price_key` to cost it. Fill numeric/pool specifics and flip `verified:true` once confirmed against the live patch. `null` + `verify` = must be pinned from data.",
+
+  "_schema": {
+    "id": "stable key, also the craftsim action name",
+    "name": "in-game name",
+    "price_key": "key into the prices table (input #3)",
+    "applies_to_rarity": "subset of [normal, magic, rare]",
+    "precondition": {"min_mods": "int|null", "needs_open_slot": "bool|null", "note": "free text"},
+    "operations": "ordered list; each transforms the item. Vocabulary below.",
+    "omen_compatible": "ids of omens that legally modify this action",
+    "verified": "true only when shape AND numbers confirmed against current patch",
+    "notes": "what still needs verifying"
+  },
+
+  "_operation_vocabulary": {
+    "set_rarity": {"to": "magic|rare"},
+    "add": {
+      "slot": "any|prefix|suffix",
+      "count": "int",
+      "pool": "full | tier_floor | group:<family> | desecrated:<bone_tier>",
+      "tier_floor": "int|null  (min modifier level when pool=tier_floor; THIS is what Greater/Perfect set)",
+      "value_random": "bool (rolled value is random within the chosen tier's range)"
+    },
+    "remove": {"select": "random|lowest|highest|chosen", "count": "int", "respect_fracture": "bool"},
+    "reroll_values": {"scope": "all|chosen", "respect_fracture": "bool"},
+    "lock": {"select": "random|chosen|lowest", "count": "int", "note": "fracture: which mod becomes immune to remove/reroll"},
+    "corrupt": {"note": "terminal; outcomes per patch"}
+  },
+
+  "currencies": [
+    {"id": "transmute", "name": "Orb of Transmutation", "price_key": "transmute",
+     "applies_to_rarity": ["normal"], "precondition": {"note": "white item"},
+     "operations": [{"set_rarity": {"to": "magic"}}, {"add": {"slot": "any", "count": 1, "pool": "full", "value_random": true}}],
+     "omen_compatible": [], "verified": true, "notes": ""},
+
+    {"id": "augment", "name": "Orb of Augmentation", "price_key": "augment",
+     "applies_to_rarity": ["magic"], "precondition": {"needs_open_slot": true},
+     "operations": [{"add": {"slot": "any", "count": 1, "pool": "full", "value_random": true}}],
+     "omen_compatible": [], "verified": true, "notes": ""},
+
+    {"id": "greater_augment", "name": "Greater Orb of Augmentation", "price_key": "greater_augment",
+     "applies_to_rarity": ["magic"], "precondition": {"needs_open_slot": true},
+     "operations": [{"add": {"slot": "any", "count": 1, "pool": "tier_floor", "tier_floor": null, "value_random": true}}],
+     "omen_compatible": [], "verified": false, "notes": "VERIFY tier_floor (min mod level Greater guarantees)"},
+
+    {"id": "perfect_augment", "name": "Perfect Orb of Augmentation", "price_key": "perfect_augment",
+     "applies_to_rarity": ["magic"], "precondition": {"needs_open_slot": true},
+     "operations": [{"add": {"slot": "any", "count": 1, "pool": "tier_floor", "tier_floor": null, "value_random": true}}],
+     "omen_compatible": [], "verified": false, "notes": "VERIFY tier_floor (higher than Greater)"},
+
+    {"id": "regal", "name": "Regal Orb", "price_key": "regal",
+     "applies_to_rarity": ["magic"], "precondition": {},
+     "operations": [{"set_rarity": {"to": "rare"}}, {"add": {"slot": "any", "count": 1, "pool": "full", "value_random": true}}],
+     "omen_compatible": ["sinistral_coronation", "dextral_coronation"], "verified": true, "notes": "VERIFY coronation omen ids/behavior"},
+
+    {"id": "greater_regal", "name": "Greater Regal Orb", "price_key": "greater_regal",
+     "applies_to_rarity": ["magic"], "precondition": {},
+     "operations": [{"set_rarity": {"to": "rare"}}, {"add": {"slot": "any", "count": 1, "pool": "tier_floor", "tier_floor": null, "value_random": true}}],
+     "omen_compatible": [], "verified": false, "notes": "VERIFY tier_floor"},
+
+    {"id": "perfect_regal", "name": "Perfect Regal Orb", "price_key": "perfect_regal",
+     "applies_to_rarity": ["magic"], "precondition": {},
+     "operations": [{"set_rarity": {"to": "rare"}}, {"add": {"slot": "any", "count": 1, "pool": "tier_floor", "tier_floor": null, "value_random": true}}],
+     "omen_compatible": [], "verified": false, "notes": "VERIFY tier_floor"},
+
+    {"id": "alchemy", "name": "Orb of Alchemy", "price_key": "alchemy",
+     "applies_to_rarity": ["normal"], "precondition": {},
+     "operations": [{"set_rarity": {"to": "rare"}}, {"add": {"slot": "any", "count": 4, "pool": "full", "value_random": true}}],
+     "omen_compatible": [], "verified": true, "notes": "VERIFY add count for current patch"},
+
+    {"id": "exalt", "name": "Exalted Orb", "price_key": "exalt",
+     "applies_to_rarity": ["rare"], "precondition": {"needs_open_slot": true},
+     "operations": [{"add": {"slot": "any", "count": 1, "pool": "full", "value_random": true}}],
+     "omen_compatible": ["sinistral_exaltation", "dextral_exaltation", "greater_exaltation", "homogenising_exaltation"],
+     "verified": true, "notes": ""},
+
+    {"id": "greater_exalt", "name": "Greater Exalted Orb", "price_key": "greater_exalt",
+     "applies_to_rarity": ["rare"], "precondition": {"needs_open_slot": true},
+     "operations": [{"add": {"slot": "any", "count": 1, "pool": "tier_floor", "tier_floor": null, "value_random": true}}],
+     "omen_compatible": ["sinistral_exaltation", "dextral_exaltation"], "verified": false, "notes": "VERIFY tier_floor"},
+
+    {"id": "perfect_exalt", "name": "Perfect Exalted Orb", "price_key": "perfect_exalt",
+     "applies_to_rarity": ["rare"], "precondition": {"needs_open_slot": true},
+     "operations": [{"add": {"slot": "any", "count": 1, "pool": "tier_floor", "tier_floor": null, "value_random": true}}],
+     "omen_compatible": ["sinistral_exaltation", "dextral_exaltation"], "verified": false, "notes": "VERIFY tier_floor (higher than Greater)"},
+
+    {"id": "chaos", "name": "Chaos Orb", "price_key": "chaos",
+     "applies_to_rarity": ["rare"], "precondition": {"min_mods": 1},
+     "operations": [{"remove": {"select": "random", "count": 1, "respect_fracture": true}},
+                    {"add": {"slot": "any", "count": 1, "pool": "full", "value_random": true}}],
+     "omen_compatible": ["whittling"], "verified": true, "notes": "VERIFY remove+add semantics for current patch"},
+
+    {"id": "greater_chaos", "name": "Greater Chaos Orb", "price_key": "greater_chaos",
+     "applies_to_rarity": ["rare"], "precondition": {"min_mods": 1},
+     "operations": [{"remove": {"select": "random", "count": 1, "respect_fracture": true}},
+                    {"add": {"slot": "any", "count": 1, "pool": "tier_floor", "tier_floor": null, "value_random": true}}],
+     "omen_compatible": ["whittling"], "verified": false, "notes": "VERIFY tier_floor and whether remove rule differs"},
+
+    {"id": "perfect_chaos", "name": "Perfect Chaos Orb", "price_key": "perfect_chaos",
+     "applies_to_rarity": ["rare"], "precondition": {"min_mods": 1},
+     "operations": [{"remove": {"select": "random", "count": 1, "respect_fracture": true}},
+                    {"add": {"slot": "any", "count": 1, "pool": "tier_floor", "tier_floor": null, "value_random": true}}],
+     "omen_compatible": ["whittling"], "verified": false, "notes": "VERIFY tier_floor (higher than Greater)"},
+
+    {"id": "annul", "name": "Orb of Annulment", "price_key": "annul",
+     "applies_to_rarity": ["magic", "rare"], "precondition": {"min_mods": 1},
+     "operations": [{"remove": {"select": "random", "count": 1, "respect_fracture": true}}],
+     "omen_compatible": ["sinistral_annulment", "dextral_annulment", "whittling"], "verified": true, "notes": ""},
+
+    {"id": "divine", "name": "Divine Orb", "price_key": "divine",
+     "applies_to_rarity": ["magic", "rare"], "precondition": {"min_mods": 1},
+     "operations": [{"reroll_values": {"scope": "all", "respect_fracture": true}}],
+     "omen_compatible": [], "verified": true, "notes": "VERIFY whether fracture locks values"},
+
+    {"id": "essence", "name": "Essence (per type)", "price_key": "essence",
+     "applies_to_rarity": ["magic"], "precondition": {},
+     "operations": [{"set_rarity": {"to": "rare"}}, {"add": {"slot": "any", "count": 1, "pool": "group:<essence_mod>", "value_random": true}}],
+     "omen_compatible": [], "verified": false, "notes": "VERIFY per-essence guaranteed mod/group and tiers; greater/perfect essence tiers"},
+
+    {"id": "fracture", "name": "Fracturing Orb", "price_key": "fracture",
+     "applies_to_rarity": ["rare"], "precondition": {"min_mods": null, "note": "VERIFY min mod count requirement"},
+     "operations": [{"lock": {"select": "random", "count": 1}}],
+     "omen_compatible": ["fracture_targeting"], "verified": false,
+     "notes": "CRITICAL VERIFY: random vs targeted, min-mods requirement, whether it can apply to magic. Random-select is what makes 'isolate then fracture' optimal."},
+
+    {"id": "vaal", "name": "Vaal Orb", "price_key": "vaal",
+     "applies_to_rarity": ["normal", "magic", "rare"], "precondition": {},
+     "operations": [{"corrupt": {}}], "omen_compatible": [], "verified": false,
+     "notes": "VERIFY corruption outcome distribution; terminal (no further crafting)"}
+  ],
+
+  "omens": [
+    {"id": "sinistral_exaltation", "name": "Omen of Sinistral Exaltation", "price_key": "omen_sinistral_exalt",
+     "modifies": "exalt-family add", "effect": {"force_slot": "prefix"}, "verified": true, "notes": ""},
+    {"id": "dextral_exaltation", "name": "Omen of Dextral Exaltation", "price_key": "omen_dextral_exalt",
+     "modifies": "exalt-family add", "effect": {"force_slot": "suffix"}, "verified": true, "notes": ""},
+    {"id": "sinistral_annulment", "name": "Omen of Sinistral Annulment", "price_key": "omen_sinistral_annul",
+     "modifies": "annul remove", "effect": {"force_slot": "prefix"}, "verified": true, "notes": ""},
+    {"id": "dextral_annulment", "name": "Omen of Dextral Annulment", "price_key": "omen_dextral_annul",
+     "modifies": "annul remove", "effect": {"force_slot": "suffix"}, "verified": true, "notes": ""},
+    {"id": "whittling", "name": "Omen of Whittling", "price_key": "omen_whittling",
+     "modifies": "chaos-family / annul remove", "effect": {"override_select": "lowest"}, "verified": false,
+     "notes": "VERIFY tie-break: lowest by mod level or by tier; applies to which actions"},
+    {"id": "greater_exaltation", "name": "Omen of Greater Exaltation", "price_key": "omen_greater_exalt",
+     "modifies": "exalt add", "effect": {"override_count": 2}, "verified": false, "notes": "VERIFY adds 2 mods"},
+    {"id": "homogenising_exaltation", "name": "Omen of Homogenising Exaltation", "price_key": "omen_homogenising_exalt",
+     "modifies": "exalt add", "effect": {"restrict_pool": "tag_of_existing_mod"}, "verified": false,
+     "notes": "VERIFY: add shares a tag with an existing mod"},
+    {"id": "fracture_targeting", "name": "Fracture-targeting omen (if any)", "price_key": "omen_fracture",
+     "modifies": "fracture lock", "effect": {"override_select": "chosen"}, "verified": false,
+     "notes": "VERIFY existence/behavior; would make targeted fracture possible"}
+  ],
+
+  "desecration": [
+    {"id": "desecrate_gnawed", "name": "Gnawed bone (basic)", "price_key": "bone_gnawed",
+     "applies_to_rarity": ["rare"], "precondition": {"needs_open_slot": true},
+     "operations": [{"add": {"slot": "any", "count": 1, "pool": "desecrated:gnawed", "value_random": true}}],
+     "omen_compatible": ["abyssal_targeting"], "verified": false,
+     "notes": "VERIFY desecrated mod pool + weights for this bone tier"},
+    {"id": "desecrate_preserved", "name": "Preserved bone", "price_key": "bone_preserved",
+     "applies_to_rarity": ["rare"], "precondition": {"needs_open_slot": true},
+     "operations": [{"add": {"slot": "any", "count": 1, "pool": "desecrated:preserved", "value_random": true}}],
+     "omen_compatible": ["abyssal_targeting"], "verified": false, "notes": "VERIFY pool/weights"},
+    {"id": "desecrate_ancient", "name": "Ancient bone (best)", "price_key": "bone_ancient",
+     "applies_to_rarity": ["rare"], "precondition": {"needs_open_slot": true},
+     "operations": [{"add": {"slot": "any", "count": 1, "pool": "desecrated:ancient", "value_random": true}}],
+     "omen_compatible": ["abyssal_targeting"], "verified": false,
+     "notes": "VERIFY pool/weights/tier floor — the 'ancient vs basic' decision hinges on these numbers"}
+  ]
+}

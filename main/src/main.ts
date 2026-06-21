@@ -94,7 +94,7 @@ let tray: AppTray;
         const overlay = new OverlayWindow(eventPipe, logger, poeWindow);
         // eslint-disable-next-line no-new
         new OverlayVisibility(eventPipe, overlay, gameConfig);
-        const shortcuts = await Shortcuts.create(
+        const shortcuts = Shortcuts.create(
           logger,
           overlay,
           poeWindow,
@@ -110,7 +110,6 @@ let tray: AppTray;
               cfg.stashScroll,
               cfg.logKeys,
               cfg.restoreClipboard,
-              cfg.language,
             );
             shortcuts.updateDelay(cfg.initialDelay);
             gameLogWatcher.restart(cfg.clientLog ?? "", cfg.readClientLog);

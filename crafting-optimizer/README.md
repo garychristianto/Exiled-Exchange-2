@@ -122,9 +122,24 @@ So the optimizer drops into the existing price pipeline; only the **mod/weight d
 
 ## Validation
 
-`tests/test_engine.py` pins the SSP math against closed-form expected costs on tiny
-pools (single guaranteed mod; geometric retry-with-restart; buy-beats-craft;
-**tier targeting**; **Divine value rerolls**). `tests/test_ingest.py` checks the
-data path (neutral JSON → ModPool → solver, and the poe2db adapter's pure units).
-The next validation step is to reproduce a handful of Craft of Exile "chance to
-hit mod X" numbers once real poe2db weights are loaded.
+Three independent layers, all offline and deterministic:
+
+1. **Closed-form** (`tests/test_engine.py`) — the SSP solver matches hand-derived
+   expected costs on tiny pools (single guaranteed mod; geometric retry-with-
+   restart; buy-beats-craft; tier targeting; Divine value rerolls).
+2. **Monte-Carlo cross-check** (`tests/test_validation.py`, `validate.py`) — the
+   analytic transition engine is checked against a *separate* random simulator
+   (`craftsim/simulate.py`) that re-implements the mechanics by sampling. This is
+   exactly the affix-probability model **Craft of Exile** emulates:
+   `P(mod) = weight / Σ(eligible weights)`, gated by slot/family/ilvl. Across
+   transmute / exalt / chaos / annul / value-gated adds / Divine, and a full
+   transmute→regal→exalt→exalt sequence, the two agree to <0.01 total-variation
+   distance, and a hand-computed reference (`P(life_t3) = 1000/7850`) is matched
+   exactly.
+3. **Ingestion** (`tests/test_ingest.py`) — neutral JSON → ModPool → solver, plus
+   the poe2db adapter's pure units.
+
+To additionally cross-check against **Craft of Exile's own live numbers for real
+PoE2 mods**, allowlist `craftofexile.com` in the environment's egress settings
+(same blocker as poe2db) and compare its "chance to hit" output against the
+engine on the same imported weights.

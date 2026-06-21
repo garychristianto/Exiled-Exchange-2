@@ -1,5 +1,7 @@
 publish:
-  - "github"
+  - provider: github
+    owner: garychristianto
+    repo: Exiled-Exchange-2
 productName: "Exiled Exchange 2"
 npmRebuild: false
 files:
